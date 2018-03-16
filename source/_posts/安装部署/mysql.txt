@@ -1,0 +1,51 @@
+# 参考http://www.centoscn.com/mysql/2016/0626/7537.html
+
+	# 下载mysql源安装包
+		shell> wget http://dev.mysql.com/get/mysql57-community-release-el7-8.noarch.rpm
+	# 安装mysql源
+		shell> yum localinstall mysql57-community-release-el7-8.noarch.rpm
+	#检查mysql源是否安装成功
+		shell> yum repolist enabled | grep "mysql.*-community.*"
+	#安装MySQL
+		shell> yum install mysql-community-server
+	#启动MySQL服务
+		shell> systemctl start mysqld
+	#开机启动
+		shell> systemctl enable mysqld
+		shell> systemctl daemon-reload
+	#修改root默认密码
+		grep 'temporary password' /var/log/mysqld.log
+		shell> mysql -uroot -p
+		mysql> update mysql.user set authentication_string=password('root') where user='root' ;
+		重启MySQL， systemctl restart mysqld.service
+		
+mysql启动失败原因：
+    data目录没有写权限
+		chmod -R 777 /var/lib/mysql
+		
+客户端ip拒绝访问：
+	grant all privileges on *.* to root@"%" identified by "root";
+	GRANT all ON *.* TO root@'%';
+	
+	
+ERROR 1045 (28000): Access denied for user 'root'@'localhost' (using password: NO)
+	vi /etc/my.cnf找到datadir
+	mysql安装时会创建个初始随机密码，在/var/log/mysqld中 
+	
+ERROR 1820 (HY000): You must reset your password using ALTER USER statement before executing this statement.
+	mysql> SET PASSWORD = PASSWORD('root')
+
+ERROR 1819 (HY000): Your password does not satisfy the current policy requirements
+	http://www.cnblogs.com/ivictor/p/5142809.html
+	
+mysql 5.7 增加用户并授权
+http://886.iteye.com/blog/2330860
+登录root账户后执行下面操作：
+
+1、创建用户,名字为userone,密码为123456
+　　create user userone@'%' identified by '123456';
+2、创建名字为dbone的数据库
+　　create database dbone;
+3、授予dbone数据库的所有权限给userone用户：
+　　grant all on dbone.* to userone
+PS:如果第3步授权失败，可以退出root账户，并重新登录；

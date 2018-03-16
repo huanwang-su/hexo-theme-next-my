@@ -1,0 +1,62 @@
+#参考：http://jingyan.baidu.com/article/3ea51489f9efbf52e61bba05.html
+#	http://www.centoscn.com/image-text/config/2015/0109/4462.html
+
+使用
+	对应用户下的.ssh/authorized_keys里添加公钥即可
+
+安装	
+	查看SSH是否安装。
+	输入命令：rpm -qa | grep ssh
+	注：若没安装SSH则可输入：yum install openssh-server安装。
+
+启动
+	service sshd restart  重启SSH服务。
+	命令：service sshd start 启动服务 |  命令：service sshd stop 停止服务  
+	重启后可输入：netstat -antp | grep sshd 查看是否启动22端口（可略）。
+	
+设置SSH服务开机启动
+	命令：chkconfig sshd on 即可
+	
+配置
+	[root@jbxue ~]# vi /etc/ssh/sshd_config　 ← 用vi打开SSH的配置文件
+	#Protocol 2,1　← 找到此行将行头“#”删除，再将行末的“,1”删除，只允许SSH2方式的连接
+	　↓
+	Protocol 2　← 修改后变为此状态，仅使用SSH2
+
+	#ServerKeyBits 768　← 找到这一行，将行首的“#”去掉，并将768改为1024
+	　↓
+	ServerKeyBits 1024　← 修改后变为此状态，将ServerKey强度改为1024比特
+
+	#PermitRootLogin yes 　← 找到这一行，将行首的“#”去掉，并将yes改为no
+	　↓
+	PermitRootLogin no 　← 修改后变为此状态，不允许用root进行登录
+
+	#PasswordAuthentication yes　← 找到这一行，将yes改为no
+	　↓
+	PasswordAuthentication no　← 修改后变为此状态，不允许密码方式的登录
+
+	#PermitEmptyPasswords no　 ← 找到此行将行头的“#”删除，不允许空密码登录
+	　↓
+	PermitEmptyPasswords no　 ← 修改后变为此状态，禁止空密码进行登录
+	修改完SSH的配置文件后，需要重新启动SSH服务才能使新的设置生效。
+	
+SSH2的公钥与私钥的建立
+	[root@jbxue ~]# su – centospub　← 登录为一般用户centospub
+	[centospub@jbxue ~]$ ssh-keygen -t rsa 　← 建立公钥与私钥
+	#一直回车
+	然后确认一下公钥与密钥的建立，以及对应于客户端的一些处理。
+	[centospub@jbxue ~]$ cd .ssh　 ← 进入用户SSH配置文件的目录
+	[centospub@jbxue .ssh]$ ls -l　 ← 列出文件
+	-rw——- 1 centospub centospub 951 Sep 4 19:22 id_rsa　 ← 确认私钥已被建立
+	-rw-r–r– 1 centospub centospub 241 Sep 4 19:22 id_rsa.pub　 ← 确认公钥已被建立
+	[centospub@jbxue .ssh]$ cat .ssh/id_rsa.pub >> .ssh/authorized_keys　 ← 公钥内容输出到相应文件中
+	[centospub@jbxue .ssh]$ rm -f .ssh/id_rsa.pub　 ← 删除原来的公钥文件
+	[centospub@jbxue .ssh]$ chmod 400 .ssh/authorized_keys　 ← 将新建立的公钥文件属性设置为400
+	
+新用户
+	不同的用户可有自己的ssh，ssh只是用于密码
+	1、建用户：
+		adduser phpq                            //新建phpq用户
+		passwd phpq                            //给phpq用户设置密码
+	2、公钥建立：
+		同上

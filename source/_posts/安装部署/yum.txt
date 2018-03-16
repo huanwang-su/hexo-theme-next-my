@@ -1,0 +1,66 @@
+--常用命令
+
+1.安装软件
+
+yum install 软件名称
+
+2.卸载软件
+
+yum remove 软件名称
+
+3.更新软件
+
+yum update 软件名称
+
+4.列出所有可安装的软件包
+
+yum list
+
+5.列出所有可更新的软件包
+
+yum list updates
+
+6.列出所有已安装的软件包
+
+yum list installed
+
+7.列出所有可更新的软件包信息
+
+yum info updates
+
+8.列出所有已安裝的软件包信息
+
+yum info installed
+
+
+ --其它命令
+
+check Check for problems in the rpmdb
+check-update 检查是否有软件包更新
+clean 删除缓存的数据
+deplist 列出软件包的依赖关系
+distribution-synchronization Synchronize installed packages to the latest available versions
+downgrade downgrade a package
+erase 从系统中移除一个或多个软件包
+groupinfo 显示组的详细信息
+groupinstall 向系统中安装一组软件包
+grouplist 列出可安装的组
+groupremove 从系统中移除一组软件包
+help 显示用法信息
+history Display, or use, the transaction history
+info 显示关于软件包或组的详细信息
+install 向系统中安装一个或多个软件包
+list 列出一个或一组软件包
+load-transaction load a saved transaction from filename
+makecache 创建元数据缓存
+provides 查找提供指定内容的软件包
+reinstall 覆盖安装一个包
+repolist 显示已配置的仓库
+resolvedep 判断哪个包提供了指定的依赖
+search 在软件包详细信息中搜索指定字符串
+shell 运行交互式的 yum 外壳
+update 更新系统中的一个或多个软件包
+update-minimal Works like update, but goes to the 'newest' package match which fixes a problem that affects your system
+updateinfo Acts on repository update information
+upgrade 更新软件包同时考虑软件包取代关系
+version yum版本信息

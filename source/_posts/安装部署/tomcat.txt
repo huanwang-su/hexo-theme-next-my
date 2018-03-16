@@ -1,0 +1,7 @@
+官网不通 wget http://www-eu.apache.org/dist/tomcat/tomcat-8/v8.5.23/bin/apache-tomcat-8.5.23.tar.gz
+
+解压：tar -zxvf apache-tomcat-8.5.23.tar.gz
+
+运行：./apache-tomcat-8.5.23/bin/startup.sh
+
+注意可能需要开放端口：iptables -I INPUT -p tcp --dport 8080 -j ACCEPT

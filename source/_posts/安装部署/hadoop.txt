@@ -1,0 +1,15 @@
+http://blog.csdn.net/xu470438000/article/details/50512442
+
+http://blog.csdn.net/u011537073/article/details/52799371
+
+注意在节点镜像中安装yum install -y which
+
+wget http://mirrors.linuxeye.com/jdk/jdk-8u152-linux-x64.tar.gz
+
+wget https://mirrors.cnnic.cn/apache/hadoop/common/stable2/hadoop-2.8.2.tar.gz
+
+wget https://codeload.github.com/jpetazzo/pipework/zip/master
+
+
+问题：集群间ping不通
+	br0不能用，用能用的那个

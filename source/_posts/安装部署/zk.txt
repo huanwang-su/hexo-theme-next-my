@@ -1,0 +1,160 @@
+单机版
+
+	来源：http://www.linuxidc.com/Linux/2016-09/135052.htm
+	在 CentOS7 上安装 zookeeper-3.4.10 服务
+		1、创建 /usr/local/my/zookeeper 文件夹：
+			mkdir -p /usr/local/my/zookeeper	 
+		2、进入到 /usr/local/my/zookeeper 目录中：
+			cd /usr/local/my/zookeeper		 
+		3、下载 zookeeper-3.4.10.tar.gz：
+			wget https://mirrors.tuna.tsinghua.edu.cn/apache/zookeeper/zookeeper-3.4.10/zookeeper-3.4.10.tar.gz		 
+		4、解压缩 zookeeper-3.4.10.tar.gz：
+			tar -zxvf zookeeper-3.4.10.tar.gz		 
+		5、进入到 /usr/local/my/zookeeper/zookeeper-3.4.10/conf 目录中：
+			cd zookeeper-3.4.10/conf/		 
+		6、复制 zoo_sample.cfg 文件的并命名为为 zoo.cfg：
+			cp zoo_sample.cfg zoo.cfg		 
+		7、用 vim 打开 zoo.cfg 文件并修改其内容为如下：
+			# The number of milliseconds of each tick		 
+			# zookeeper 定义的基准时间间隔，单位：毫秒
+			tickTime=2000		 
+			# The number of ticks that the initial 
+			# synchronization phase can take
+			initLimit=10
+			# The number of ticks that can pass between 
+			# sending a request and getting an acknowledgement
+			syncLimit=5
+			# the directory where the snapshot is stored.
+			# do not use /tmp for storage, /tmp here is just 
+			# example sakes.
+			# dataDir=/tmp/zookeeper 
+			# 数据文件夹
+			dataDir=/usr/local/my/zookeeper/zookeeper-3.4.10/data		 
+			# 日志文件夹
+			dataLogDir=/usr/local/my/zookeeper/zookeeper-3.4.10/logs		 
+			# the port at which the clients will connect
+			# 客户端访问 zookeeper 的端口号
+			clientPort=2181		 
+			# the maximum number of client connections.
+			# increase this if you need to handle more clients
+			#maxClientCnxns=60
+			#
+			# Be sure to read the maintenance section of the 
+			# administrator guide before turning on autopurge.
+			#
+			# http://zookeeper.apache.org/doc/current/zookeeperAdmin.html#sc_maintenance
+			#
+			# The number of snapshots to retain in dataDir
+			#autopurge.snapRetainCount=3
+			# Purge task interval in hours
+			# Set to "0" to disable auto purge feature
+			#autopurge.purgeInterval=1
+		 
+		8、保存并关闭 zoo.cfg 文件:			
+		9、进入到 /usr/local/my/zookeeper/zookeeper-3.4.10/bin 目录中：
+			cd ../bin/		 
+		10、用 vim 打开 /etc/ 目录下的配置文件 profile：
+			vim /etc/profile
+			并在其尾部追加如下内容：		 
+			# idea - zookeeper-3.4.10 config start - 2016-09-08		 
+			export ZOOKEEPER_HOME=/usr/local/my/zookeeper/zookeeper-3.4.10/
+			export PATH=$ZOOKEEPER_HOME/bin:$PATH
+			export PATH		 
+			# idea - zookeeper-3.4.10 config start - 2016-09-08		 
+		11、使 /etc/ 目录下的 profile 文件即可生效：
+			source /etc/profile		 
+		12、启动 zookeeper 服务：
+			zkServer.sh start
+			如打印如下信息则表明启动成功：
+			ZooKeeper JMX enabled by default
+			Using config: /usr/local/my/zookeeper/zookeeper-3.4.10/bin/../conf/zoo.cfg
+			Starting zookeeper ... STARTED		 
+		13、查询 zookeeper 状态：
+			zkServer.sh status		 
+		14、关闭 zookeeper 服务：
+			zkServer.sh stop
+			如打印如下信息则表明成功关闭：
+			ZooKeeper JMX enabled by default
+			Using config: /usr/local/my/zookeeper/zookeeper-3.4.10/bin/../conf/zoo.cfg
+			Stopping zookeeper ... STOPPED		 
+		15、重启 zookeeper 服务：
+			zkServer.sh restart
+			如打印如下信息则表明重启成功：
+			ZooKeeper JMX enabled by default
+			Using config: /usr/local/my/zookeeper/zookeeper-3.4.10/bin/../conf/zoo.cfg
+			ZooKeeper JMX enabled by default
+			Using config: /usr/local/my/zookeeper/zookeeper-3.4.10/bin/../conf/zoo.cfg
+			Stopping zookeeper ... STOPPED
+			ZooKeeper JMX enabled by default
+			Using config: /usr/local/my/zookeeper/zookeeper-3.4.10/bin/../conf/zoo.cfg
+			Starting zookeeper ... STARTED
+			
+伪集群
+	来源：http://www.cnblogs.com/haippy/archive/2012/07/19/2599989.html
+	
+	在一台机器上部署了3个server，需要注意的是在集群为分布式模式下我们使用的每个配置文档模拟一台机器，也就是说单台机器及上运行多个Zookeeper实例。但是，必须保证每个配置文档的各个端口号不能冲突，除了clientPort不同之外，dataDir也不同。另外，还要在dataDir所对应的目录中创建myid文件来指定对应的Zookeeper服务器实例。
+
+	配置
+		tickTime：这个时间是作为 Zookeeper 服务器之间或客户端与服务器之间维持心跳的时间间隔，也就是每个 tickTime 时间就会发送一个心跳。
+		dataDir：顾名思义就是 Zookeeper 保存数据的目录，默认情况下，Zookeeper 将写数据的日志文件也保存在这个目录里。
+		clientPort：这个端口就是客户端连接 Zookeeper 服务器的端口，Zookeeper 会监听这个端口，接受客户端的访问请求。
+		initLimit：这个配置项是用来配置 Zookeeper 接受客户端（这里所说的客户端不是用户连接 Zookeeper 服务器的客户端，而是 Zookeeper 服务器集群中连接到 Leader 的 Follower 服务器）初始化连接时最长能忍受多少个心跳时间间隔数。当已经超过 5个心跳的时间（也就是 tickTime）长度后 Zookeeper 服务器还没有收到客户端的返回信息，那么表明这个客户端连接失败。总的时间长度就是 5*2000=10 秒
+		syncLimit：这个配置项标识 Leader 与 Follower 之间发送消息，请求和应答时间长度，最长不能超过多少个 tickTime 的时间长度，总的时间长度就是 2*2000=4 秒
+		server.A=B：C：D：其中 A 是一个数字，表示这个是第几号服务器；B 是这个服务器的 ip 地址；C 表示的是这个服务器与集群中的 Leader 服务器交换信息的端口；D 表示的是万一集群中的 Leader 服务器挂了，需要一个端口来重新进行选举，选出一个新的 Leader，而这个端口就是用来执行选举时服务器相互通信的端口。如果是伪集群的配置方式，由于 B 都是一样，所以不同的 Zookeeper 实例通信端口号不能一样，所以要给它们分配不同的端口号。
+		
+			tickTime=2000
+			initLimit=10
+			syncLimit=5
+			dataDir=/usr/local/my/zookeeper/zookeeper_2/data
+			dataLogDir=/usr/local/my/zookeeper/zookeeper_2/datalog
+			clientPort=2184
+
+			server.0=localhost:2287:3387
+			server.1=localhost:2288:3388
+			server.2=localhost:2289:3389
+			
+		在.../data/ 下建立一个myid文件，文件内容为 2，
+			echo "1" >> /usr/local/my/zookeeper/zookeeper_2/data/myid
+		
+		修改zookeeper_0，zookeeper_1的文件
+		
+		目录结构
+			├── zookeeper0
+			│   ├── data
+			│   ├── datalog
+			│   └── zookeeper-3.4.0
+			├── zookeeper_1
+			│   ├── data
+			│   ├── datalog
+			│   └── zookeeper-3.4.0
+			└── zookeeper_2
+			    ├── data
+			    ├── datalog
+			    └── zookeeper-3.4.0
+
+	启动
+		然后依次进入每个文件夹节点的zookeeper目录中，启动zookeeper服务，
+			$ bin/zkServer.sh start
+	
+命令：
+	ZooKeeper服务命令:
+		在准备好相应的配置之后，可以直接通过zkServer.sh 这个脚本进行服务的相关操作
+		1. 启动ZK服务:       sh bin/zkServer.sh start
+		2. 查看ZK服务状态: sh bin/zkServer.sh status
+		3. 停止ZK服务:       sh bin/zkServer.sh stop
+		4. 重启ZK服务:       sh bin/zkServer.sh restart
+    zk客户端命令
+	    ZooKeeper命令行工具类似于Linux的shell环境，不过功能肯定不及shell啦，但是使用它我们可以简单的对ZooKeeper进行访问，数据创建，数据修改等操作.  使用 zkCli.sh -server 127.0.0.1:2181 连接到 ZooKeeper 服务，连接成功后，系统会输出 ZooKeeper 的相关环境以及配置信息。
+		1. 显示根目录下、文件： ls / 
+		2. 显示根目录下、文件： ls2 / 
+		3. 创建文件，并设置初始内容： create /zk "test" 
+		4. 获取文件内容： get /zk 
+		5. 修改文件内容： set /zk "zkbak" 
+		6. 删除文件： delete /zk 
+		7. 退出客户端： quit
+		8. 帮助命令： help
+		
+		
+		
+/SectionThreadPool/threadPool
+	

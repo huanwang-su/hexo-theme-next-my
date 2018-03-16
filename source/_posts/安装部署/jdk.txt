@@ -1,0 +1,27 @@
+来源：http://blog.sina.com.cn/s/blog_6d59e57d0102x21u.html
+
+安装之前先检查一下系统有没有自带open-jdk
+命令：
+rpm -qa |grep java
+rpm -qa |grep jdk
+rpm -qa |grep gcj
+
+如果没有输入信息表示没有安装。
+如果安装可以使用rpm -qa | grep java | xargs rpm -e --nodeps 批量卸载所有带有Java的文件   这句命令的关键字是java
+首先检索包含java的列表
+
+yum list java*
+ 
+检索1.8的列表
+
+yum list java-1.8*   
+
+安装1.8.0的所有文件
+
+yum install java-1.8.0-openjdk* -y
+
+使用命令检查是否安装成功
+
+java -version
+
+到此安装结束了。这样安装有一个好处就是不需要对path进行设置，自动就设置好了
