@@ -174,6 +174,28 @@ drop直接删掉表；truncate删除表中数据，再插入时自增长id又从
 
 ​       综上所述，用B-Tree作为索引结构效率是非常高的。
 
+**不使用索引的情况**
+
+- 以%开头的LIKE查询不能够利用B-tree索引
+
+- 数据类型出现隐式转换
+
+  > explain select * from actor where last_name=1;
+  >
+  > explain select * from actor where last_name='1; 
+
+- 复合索引的情况下，查询条件不满足索引最左的原则
+
+- Mysql估计使用索引比全表扫描慢
+
+- 用or分割开的条件，or前条件有索引，or后的列没有索引
+
+- 负向查询（not  , not in, not like, <>, != ,!>,!<  ） 不会使用索引
+
+- 独立的列 索引 不能是表达式的一部分
+
+  > select \* from  xxxx where id+1;
+
 ### 6. 连接种类
 
 外连接
