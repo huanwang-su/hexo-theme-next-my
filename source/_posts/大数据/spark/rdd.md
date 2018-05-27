@@ -667,30 +667,114 @@ def nonNegativeMod(x: Int, mod: Int): Int = {
 
 ### RangePartitioner
 
-这个分区器，适合想要把数据打散的场景，但是如果相同的key重复量很大，依然会出现数据倾斜的情况。
+从HashPartitioner分区的实现原理我们可以看出，其结果可能导致每个分区中数据量的不均匀，极端情况下会导致某些分区拥有RDD的全部数据，这显然不是我们需要的。而RangePartitioner分区则尽量保证每个分区中数据量的均匀，而且分区与分区之间是有序的，也就是说一个分区中的元素肯定都是比另一个分区内的元素小或者大；==但是分区内的元素是不能保证顺序的。简单的说就是将一定范围内的数映射到某一个分区内。==
 
-每个分区器，最核心的方法，就是getPartition
+``` scala
+class RangePartitioner[K: Ordering : ClassTag, V](
+                                                   partitions: Int,
+                                                   rdd: RDD[_ <: Product2[K, V]],
+                                                   private var ascending: Boolean = true)
+  extends Partitioner {
 
-```scala
-def getPartition(key: Any): Int = {
+  // We allow partitions = 0, which happens when sorting an empty RDD under the default settings.
+  require(partitions >= 0, s"Number of partitions cannot be negative but found $partitions.")
+
+  // 获取RDD中key类型数据的排序器
+  private var ordering = implicitly[Ordering[K]]
+
+  // An array of upper bounds for the first (partitions - 1) partitions
+  private var rangeBounds: Array[K] = {
+    if (partitions <= 1) {
+      // 如果给定的分区数是一个的情况下，直接返回一个空的集合，表示数据不进行分区
+      Array.empty
+    } else {
+      // This is the sample size we need to have roughly balanced output partitions, capped at 1M.
+      // 给定总的数据抽样大小，最多1M的数据量(10^6)，最少20倍的RDD分区数量，也就是每个RDD分区至少抽取20条数据
+      val sampleSize = math.min(20.0 * partitions, 1e6)
+      // Assume the input partitions are roughly balanced and over-sample a little bit.
+      // 计算每个分区抽取的数据量大小， 假设输入数据每个分区分布的比较均匀
+      // 对于超大数据集(分区数超过5万的)乘以3会让数据稍微增大一点，对于分区数低于5万的数据集，每个分区抽取数据量为60条也不算多
+      val sampleSizePerPartition = math.ceil(3.0 * sampleSize / rdd.partitions.size).toInt
+      // 从rdd中抽取数据，返回值:(总rdd数据量， Array[分区id，当前分区的数据量，当前分区抽取的数据])
+      val (numItems, sketched) = RangePartitioner.sketch(rdd.map(_._1), sampleSizePerPartition)
+      if (numItems == 0L) {
+        // 如果总的数据量为0(RDD为空)，那么直接返回一个空的数组
+        Array.empty
+      } else {
+        // If a partition contains much more than the average number of items, we re-sample from it
+        // to ensure that enough items are collected from that partition.
+        // 计算总样本数量和总记录数的占比，占比最大为1.0
+        val fraction = math.min(sampleSize / math.max(numItems, 1L), 1.0)
+        // 保存样本数据的集合buffer
+        val candidates = ArrayBuffer.empty[(K, Float)]
+        // 保存数据分布不均衡的分区id(数据量超过fraction比率的分区)
+        val imbalancedPartitions = mutable.Set.empty[Int]
+        // 计算抽取出来的样本数据
+        sketched.foreach { case (idx, n, sample) =>
+          if (fraction * n > sampleSizePerPartition) {
+            // 如果fraction乘以当前分区中的数据量大于之前计算的每个分区的抽象数据大小，那么表示当前分区抽取的数据太少了，该分区数据分布不均衡，需要重新抽取
+            imbalancedPartitions += idx
+          } else {
+            // 当前分区不属于数据分布不均衡的分区，计算占比权重，并添加到candidates集合中
+            // The weight is 1 over the sampling probability.
+            val weight = (n.toDouble / sample.size).toFloat
+            for (key <- sample) {
+              candidates += ((key, weight))
+            }
+          }
+        }
+
+        // 对于数据分布不均衡的RDD分区，重新进行数据抽样
+        if (imbalancedPartitions.nonEmpty) {
+          // Re-sample imbalanced partitions with the desired sampling probability.
+          // 获取数据分布不均衡的RDD分区，并构成RDD
+          val imbalanced = new PartitionPruningRDD(rdd.map(_._1), imbalancedPartitions.contains)
+          // 随机种子
+          val seed = byteswap32(-rdd.id - 1)
+          // 利用rdd的sample抽样函数API进行数据抽样
+          val reSampled = imbalanced.sample(withReplacement = false, fraction, seed).collect()
+          val weight = (1.0 / fraction).toFloat
+          candidates ++= reSampled.map(x => (x, weight))
+        }
+
+        // 将最终的抽样数据计算出rangeBounds出来
+        RangePartitioner.determineBounds(candidates, partitions)
+      }
+    }
+  }
+
+  // 下一个RDD的分区数量是rangeBounds数组中元素数量+ 1个
+  def numPartitions: Int = rangeBounds.length + 1
+
+  // 二分查找器，内部使用java中的Arrays类提供的二分查找方法
+  private var binarySearch: ((Array[K], K) => Int) = CollectionsUtils.makeBinarySearch[K]
+
+  // 根据RDD的key值返回对应的分区id。从0开始
+  def getPartition(key: Any): Int = {
+    // 强制转换key类型为RDD中原本的数据类型
     val k = key.asInstanceOf[K]
     var partition = 0
     if (rangeBounds.length <= 128) {
       // If we have less than 128 partitions naive search
+      // 如果分区数据小于等于128个，那么直接本地循环寻找当前k所属的分区下标
       while (partition < rangeBounds.length && ordering.gt(k, rangeBounds(partition))) {
         partition += 1
       }
     } else {
       // Determine which binary search method to use only once.
+      // 如果分区数量大于128个，那么使用二分查找方法寻找对应k所属的下标;
+      // 但是如果k在rangeBounds中没有出现，实质上返回的是一个负数(范围)或者是一个超过rangeBounds大小的数(最后一个分区，比所有数据都大)
       partition = binarySearch(rangeBounds, k)
       // binarySearch either returns the match location or -[insertion point]-1
       if (partition < 0) {
-        partition = -partition-1
+        partition = -partition - 1
       }
       if (partition > rangeBounds.length) {
         partition = rangeBounds.length
       }
     }
+
+    // 根据数据排序是升序还是降序进行数据的排列，默认为升序
     if (ascending) {
       partition
     } else {
@@ -699,20 +783,25 @@ def getPartition(key: Any): Int = {
   }
 ```
 
-在range分区中，会存储一个边界的数组，比如[1,100,200,300,400]，然后对比传进来的key，返回对应的分区id。
 
-#### 边界如何确定
 
-遍历每个paritiion，对里面的数据进行抽样，把抽样的数据进行排序，并按照对应的权重确定边界。
+#### **采样总数**
 
-有几个比较重要的地方：
+在新的rangeBounds算法总，采样总数做了一个限制，也就是最大只采样1e6的样本（也就是1000000）：
 
-- 1 抽样
-- 2 确定边界
+`val sampleSize =math.min(20.0 * partitions, 1e6)`
 
-##### 抽样
+#### **父RDD中每个分区采样样本数**
 
-在不知道数据规模的情况下，如何以等概率的方式，随机选择一个值。在Spark中，是使用`水塘抽样`这种算法。
+　　按照我们的思路，正常情况下，父RDD每个分区需要采样的数据量应该是sampleSize/rdd.partitions.size，但是我们看代码的时候发现父RDD每个分区需要采样的数据量是正常数的3倍。
+
+`val sampleSizePerPartition = math.ceil(3.0* sampleSize / rdd.partitions.size).toInt`
+
+因为父RDD各分区中的数据量可能会出现倾斜的情况，乘于3的目的就是保证数据量小的分区能够采样到足够的数据，而对于数据量大的分区会进行第二次采样。
+
+#### **采样算法**
+
+　　这个地方就是RangePartitioner分区的核心了，其内部使用的就是水塘抽样，而这个抽样特别适合那种总数很大而且未知，并无法将所有的数据全部存放到主内存中的情况。也就是我们不需要事先知道RDD中元素的个数（不需要调用rdd.count()了！）。
 
 > 水塘抽样
 >
@@ -727,7 +816,70 @@ def getPartition(key: Any): Int = {
 
 最后就可以通过获取的样本数据，确定边界了。
 
-![img](https://images2015.cnblogs.com/blog/449064/201704/449064-20170416140016337-455449521.png) 
+```
+// 从rdd中抽取数据，返回值:(总rdd数据量， Array[分区id，当前分区的数据量，当前分区抽取的数据])
+      val (numItems, sketched) = RangePartitioner.sketch(rdd.map(_._1), sampleSizePerPartition)
+```
+
+
+
+![ img](https://images2015.cnblogs.com/blog/449064/201704/449064-20170416140016337-455449521.png) 
+
+父RDD各分区中的数据量可能不均匀，在极端情况下，有些分区内的数据量会占有整个RDD的绝大多数的数据，如果按照水塘抽样进行采样，会导致该分区所采样的数据量不足，所以我们需要对该分区再一次进行采样，而这次采样使用的就是rdd的sample函数。
+
+对于满足于`fraction * n > sampleSizePerPartition`条件的分区，我们对其再一次采样。所有采样完的数据全部存放在candidates 中。 
+
+#### **确认边界**
+
+从上面的采样算法可以看出，对于不同的分区weight的值是不一样的（不同分区的元素数量不一样，但每个分区采样数是一样的），这个值对应的就是每个分区的采样间隔。
+
+RangePartitioner的determineBounds函数的作用是根据样本数据记忆权重大小确定数据边界, 代码注释讲解如下：
+
+```  scala
+def determineBounds[K: Ordering : ClassTag](
+                                               candidates: ArrayBuffer[(K, Float)],
+                                               partitions: Int): Array[K] = {
+    val ordering = implicitly[Ordering[K]]
+    // 按照数据进行数据排序，默认升序排列
+    val ordered = candidates.sortBy(_._1)
+    // 获取总的样本数量大小
+    val numCandidates = ordered.size
+    // 计算总的权重大小
+    val sumWeights = ordered.map(_._2.toDouble).sum
+    // 计算步长
+    val step = sumWeights / partitions
+    var cumWeight = 0.0
+    var target = step
+    val bounds = ArrayBuffer.empty[K]
+    var i = 0
+    var j = 0
+    var previousBound = Option.empty[K]
+    while ((i < numCandidates) && (j < partitions - 1)) {
+      // 获取排序后的第i个数据及权重
+      val (key, weight) = ordered(i)
+      // 累计权重
+      cumWeight += weight
+      if (cumWeight >= target) {
+        // Skip duplicate values.
+        // 权重已经达到一个步长的范围，计算出一个分区id的值
+        if (previousBound.isEmpty || ordering.gt(key, previousBound.get)) {
+          // 上一个边界值为空，或者当前边界key数据大于上一个边界的值，那么当前key有效，进行计算
+          // 添加当前key到边界集合中
+          bounds += key
+          // 累计target步长界限
+          target += step
+          // 分区数量加1
+          j += 1
+          // 上一个边界的值重置为当前边界的值
+          previousBound = Some(key)
+        }
+      }
+      i += 1
+    }
+    // 返回结果
+    bounds.toArray
+  }
+```
 
 ### 自定义分区器
 
